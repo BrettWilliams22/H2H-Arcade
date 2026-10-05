@@ -184,9 +184,11 @@ function drawPaddle(p: Painter, x: number): void {
   p.rect(x + PADDLE_W / 2 - 1, PADDLE_Y + 2, 2, 2, shade(COLORS.paddle, -0.2));
 }
 
-function drawBall(p: Painter, x: number, y: number, fx: Effects): void {
-  fx.trail.forEach((t, i) => {
-    const alpha = ((i + 1) / (fx.trail.length + 1)) * 0.35;
+function drawBall(p: Painter, x: number, y: number, fx: Effects, smoothing: boolean): void {
+  // While the ball is drawn between frames, the newest trail point is still ahead of it, so leave it out.
+  const trail = smoothing ? fx.trail.slice(0, -1) : fx.trail;
+  trail.forEach((t, i) => {
+    const alpha = ((i + 1) / (trail.length + 1)) * 0.35;
     p.rect(t.x, t.y, BALL_SIZE, BALL_SIZE, `rgba(160,220,255,${alpha})`);
   });
   p.rect(x - 1, y - 1, BALL_SIZE + 2, BALL_SIZE + 2, "rgba(255,255,255,0.25)");
@@ -252,7 +254,8 @@ export function drawFrame(
   const shake = calm ? 0 : fx.shake;
   ctx.save();
   ctx.beginPath();
-  ctx.rect(0, Math.round(HUD_H * scale), Math.round(FIELD_W * scale), Math.round(FIELD_H * scale));
+  const fieldTop = Math.round(HUD_H * scale);
+  ctx.rect(0, fieldTop, ctx.canvas.width, ctx.canvas.height - fieldTop);
   ctx.clip();
   p.ox = shake > 0 ? Math.round(Math.sin(time * 0.09) * shake) : 0;
   p.oy = HUD_H + (shake > 0 ? Math.round(Math.cos(time * 0.11) * shake) : 0);
@@ -267,7 +270,7 @@ export function drawFrame(
   const smooth = !fx.ballJumped;
   const ballX = (smooth ? lerp(fx.prev.ballX, state.ballX) : state.ballX) / FP;
   const ballY = (smooth ? lerp(fx.prev.ballY, state.ballY) : state.ballY) / FP;
-  drawBall(p, ballX, ballY, fx);
+  drawBall(p, ballX, ballY, fx, smooth && alpha < 1);
   drawEffects(p, fx);
   drawOverlay(p, fx, overlay, time, calm);
 

@@ -156,25 +156,33 @@ export function runReplay(replay: Replay): ReplayResult {
   return resultOf(player.state);
 }
 
-/** What the checker should insist on, beyond the recording being well formed. */
-export interface ReplayExpectations {
-  /**
-   * The seed of the match this recording is for. The server must always pass
-   * it: otherwise a player could submit a good recording from a different
-   * (or easier) layout.
-   */
-  seed?: number;
-}
+export type VerifyResult = { ok: true; result: ReplayResult } | { ok: false; error: string };
 
-/** Validates untrusted replay data, then plays it. This is what the server will run. */
-export function verifyReplay(
-  data: unknown,
-  expected: ReplayExpectations = {},
-): { ok: true; result: ReplayResult } | { ok: false; error: string } {
+/**
+ * Validates untrusted replay data, then plays it. For tools and checks that
+ * aren't about a match (Device Check, the score command). The server must use
+ * verifyMatchReplay instead.
+ */
+export function verifyReplay(data: unknown): VerifyResult {
   const checked = validateReplay(data);
   if (!checked.ok) return checked;
-  if (expected.seed !== undefined && checked.replay.seed !== expected.seed >>> 0) {
-    return { ok: false, error: `replay is for seed ${checked.replay.seed}, but this match uses seed ${expected.seed >>> 0}` };
+  return { ok: true, result: runReplay(checked.replay) };
+}
+
+/**
+ * What the server runs for a match: like verifyReplay, but the recording must
+ * be for this match's seed, so a great game on some other (easier) layout
+ * can't be submitted. The seed is required, and an invalid one throws instead
+ * of being converted, so a server bug can't quietly switch the check off.
+ */
+export function verifyMatchReplay(data: unknown, matchSeed: number): VerifyResult {
+  if (!Number.isSafeInteger(matchSeed) || matchSeed < 0 || matchSeed > 0xffffffff) {
+    throw new Error(`verifyMatchReplay: invalid match seed ${String(matchSeed)}`);
+  }
+  const checked = validateReplay(data);
+  if (!checked.ok) return checked;
+  if (checked.replay.seed !== matchSeed) {
+    return { ok: false, error: `replay is for seed ${checked.replay.seed}, but this match uses seed ${matchSeed}` };
   }
   return { ok: true, result: runReplay(checked.replay) };
 }

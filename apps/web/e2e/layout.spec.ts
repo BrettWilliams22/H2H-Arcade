@@ -1,6 +1,6 @@
 import { FIELD_W, PADDLE_W } from "@h2h/game";
 import { expect, test } from "@playwright/test";
-import { trackErrors } from "./helpers";
+import { freezeClock, trackErrors } from "./helpers";
 
 async function noSideways(page: import("@playwright/test").Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -9,8 +9,7 @@ async function noSideways(page: import("@playwright/test").Page) {
 
 test("home and play screens fit the screen", async ({ page }) => {
   const errors = trackErrors(page);
-  await page.clock.install();
-  await page.goto("/");
+  await freezeClock(page);
   await expect(page.getByRole("heading", { name: /BRICK/ })).toBeVisible();
   await noSideways(page);
 
@@ -33,8 +32,7 @@ test("home and play screens fit the screen", async ({ page }) => {
 
 test("dragging moves the paddle without launching; a tap launches", async ({ page }, info) => {
   test.skip(info.project.name !== "phone", "touch test");
-  await page.clock.install();
-  await page.goto("/");
+  await freezeClock(page);
   await page.getByRole("button", { name: /PRACTICE/ }).click();
   await page.clock.runFor(3_600);
   const surface = page.getByTestId("play-surface");
@@ -44,8 +42,9 @@ test("dragging moves the paddle without launching; a tap launches", async ({ pag
   const touch = (type: string, id: number, x: number) =>
     surface.dispatchEvent(type, { pointerId: id, pointerType: "touch", clientX: x, clientY: y, isPrimary: id === 1 });
 
-  // Play starts 3.5 s after the button. The ball serves by itself at frame 119, so all of this must happen well before.
-  const frame = async () => Number(await surface.getAttribute("data-frame"));
+  // Play starts 3.5 s after the button. The ball serves by itself at frame 119, so all of this must happen
+  // well before. data-last-serve is the frame of the latest serve.
+  const lastServe = () => surface.getAttribute("data-last-serve");
 
   // Drag from the left edge to the right edge: the paddle follows, but the ball stays on it.
   await touch("pointerdown", 1, box.x + 10);
@@ -53,17 +52,21 @@ test("dragging moves the paddle without launching; a tap launches", async ({ pag
     await touch("pointermove", 1, box.x + (box.width * i) / 5 - 5);
     await page.clock.runFor(60);
   }
-  // The page publishes its numbers every 30 frames; wait past frame 60 so the paddle has arrived.
+  // The page publishes the paddle position every 30 frames; wait past frame 60 so it has arrived.
   await page.clock.runFor(700);
-  expect(await frame()).toBeGreaterThanOrEqual(60);
+  expect(Number(await surface.getAttribute("data-frame"))).toBeGreaterThanOrEqual(60);
   expect(Number(await surface.getAttribute("data-paddle"))).toBe(FIELD_W - PADDLE_W);
-  expect(Number(await surface.getAttribute("data-serves"))).toBe(0);
-  await touch("pointerup", 1, box.x + box.width - 5);
 
-  // A quick tap launches.
+  // Lifting the finger at the end of the swipe doesn't launch either.
+  await touch("pointerup", 1, box.x + box.width - 5);
+  await page.clock.runFor(200);
+  expect(await lastServe()).toBeNull();
+
+  // A quick tap launches, well before the automatic serve.
   await touch("pointerdown", 1, box.x + box.width - 5);
   await touch("pointerup", 1, box.x + box.width - 5);
-  await page.clock.runFor(500);
-  expect(await frame()).toBeLessThan(119);
-  expect(Number(await surface.getAttribute("data-serves"))).toBe(1);
+  await page.clock.runFor(100);
+  const served = Number(await lastServe());
+  expect(served).toBeGreaterThan(60);
+  expect(served).toBeLessThan(119);
 });

@@ -1,11 +1,10 @@
 import { readFileSync } from "node:fs";
 import { verifyReplay } from "@h2h/game";
 import { type Page, expect, test } from "@playwright/test";
-import { trackErrors } from "./helpers";
+import { freezeClock, trackErrors } from "./helpers";
 
 async function startPractice(page: Page) {
-  await page.clock.install();
-  await page.goto("/");
+  await freezeClock(page);
   await page.getByRole("button", { name: /PRACTICE/ }).click();
   await expect(page.getByTestId("play-surface")).toBeVisible();
 }
@@ -51,12 +50,19 @@ test("a full practice game: the score the browser shows is the score the replay 
   expect(checked.ok).toBe(true);
   if (checked.ok) expect(checked.result.score).toBe(shownScore);
 
-  // The replay viewer plays it back, and Back returns to the results.
+  // The replay viewer plays it back. Its BACK button and the phone's Back button both return to the results.
   await page.getByRole("button", { name: "WATCH REPLAY" }).click();
   await page.clock.runFor(3_000);
   await expect(page.getByRole("img", { name: /Replay/ })).toBeVisible();
-  await page.getByRole("button", { name: /BACK/ }).click();
+  await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByTestId("final-score")).toHaveText(String(shownScore));
+  await page.getByRole("button", { name: "WATCH REPLAY" }).click();
+  await expect(page.getByRole("img", { name: /Replay/ })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByTestId("final-score")).toHaveText(String(shownScore));
+  // And Back from the results goes Home.
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: /BRICK/ })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -113,15 +119,31 @@ test("pausing stops the game, and the keyboard can resume and quit", async ({ pa
   await expect(page.getByRole("heading", { name: /BRICK/ })).toBeVisible();
 });
 
-test("the phone's Back button pauses the game instead of leaving", async ({ page }) => {
+// Note: Playwright's goBack() doesn't apply Chrome's rule that skips history
+// entries a page added without a tap. The app is built so it only ever adds
+// entries during a tap or click, so that rule never applies to it.
+test("the phone's Back button pauses the game, and works again after resuming", async ({ page }) => {
   await startPractice(page);
   await page.clock.runFor(5_000);
+  const dialog = page.getByRole("dialog", { name: "Paused" });
   await page.goBack();
-  await expect(page.getByRole("dialog", { name: "Paused" })).toBeVisible();
+  await expect(dialog).toBeVisible();
   await expect(page.getByTestId("play-surface")).toBeVisible();
-  // A second Back is caught too.
+
+  await page.getByRole("button", { name: "RESUME" }).click();
+  await expect(dialog).toBeHidden();
+  await page.clock.runFor(4_000);
   await page.goBack();
-  await expect(page.getByRole("dialog", { name: "Paused" })).toBeVisible();
+  await expect(dialog).toBeVisible();
   await page.getByRole("button", { name: "QUIT" }).click();
   await expect(page.getByRole("heading", { name: /BRICK/ })).toBeVisible();
+});
+
+test("a launch pressed while GO! is showing serves on the first frame", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "keyboard test");
+  await startPractice(page);
+  await page.clock.runFor(3_200); // "GO!" shows from 3.0 s to 3.5 s
+  await page.keyboard.press("Space");
+  await page.clock.runFor(1_000);
+  expect(await page.getByTestId("play-surface").getAttribute("data-last-serve")).toBe("1");
 });

@@ -15,7 +15,16 @@ if (!rest[0]) {
   process.exit(1);
 }
 
-const checked = verifyReplay(JSON.parse(readFileSync(rest[0], "utf8")));
+let data: unknown;
+try {
+  data = JSON.parse(readFileSync(rest[0], "utf8"));
+} catch (e) {
+  const reason = e instanceof SyntaxError ? "it isn't a recording (not valid JSON)" : (e as Error).message;
+  console.error(`Could not read ${rest[0]}: ${reason}`);
+  console.error('If the file name has spaces or brackets, put it in quotes: npm run score -- "my file (1).json"');
+  process.exit(1);
+}
+const checked = verifyReplay(data);
 if (!checked.ok) {
   console.error(`REJECTED: ${checked.error}`);
   process.exit(1);

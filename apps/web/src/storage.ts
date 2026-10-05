@@ -51,10 +51,19 @@ function loadFromStorage(): Bests {
   }
 }
 
-let cache: Bests | null = null;
+/** The best of two records, so neither this tab nor another one ever loses a best. */
+function merge(a: Bests, b: Bests): Bests {
+  const daily = { ...a.daily };
+  for (const [day, score] of Object.entries(b.daily)) daily[day] = Math.max(daily[day] ?? 0, score);
+  return { practice: Math.max(a.practice, b.practice), daily };
+}
+
+/** This visit's copy, used when storage can't be read. */
+let cache: Bests = { practice: 0, daily: {} };
 
 export function loadBests(): Bests {
-  cache ??= loadFromStorage();
+  // Re-read every time (another tab may have saved a better score), keeping anything better from this visit.
+  cache = merge(cache, loadFromStorage());
   return { practice: cache.practice, daily: { ...cache.daily } };
 }
 

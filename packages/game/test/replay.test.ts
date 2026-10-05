@@ -9,6 +9,7 @@ import {
   type Replay,
   runReplay,
   validateReplay,
+  verifyMatchReplay,
   verifyReplay,
 } from "../src/index";
 import { playBotGame } from "../tools/play";
@@ -106,10 +107,18 @@ describe("runReplay", () => {
 
   it("rejects a valid recording made on a different seed than the match's", () => {
     const game = playBotGame(77, 90);
-    expect(verifyReplay(game.replay, { seed: 77 }).ok).toBe(true);
-    const other = verifyReplay(game.replay, { seed: 78 });
+    const same = verifyMatchReplay(game.replay, 77);
+    expect(same.ok && same.result.score).toBe(game.live.score);
+    const other = verifyMatchReplay(game.replay, 78);
     expect(other.ok).toBe(false);
     if (!other.ok) expect(other.error).toMatch(/seed/);
+  });
+
+  it("refuses to run the match check with an invalid match seed, instead of guessing", () => {
+    const game = playBotGame(0, 50);
+    for (const bad of [Number.NaN, -1, 1.5, 2 ** 32, 2 ** 32 + 77, Number(undefined)]) {
+      expect(() => verifyMatchReplay(game.replay, bad)).toThrow(/invalid match seed/);
+    }
   });
 
   it("gives a different result for a different seed with the same inputs", () => {

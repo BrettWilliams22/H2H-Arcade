@@ -91,16 +91,19 @@ through to it:
   yourself: the computer recomputes the score from the inputs alone, and it
   should match the score the browser showed.
   ```bash
-  npm run score -- /mnt/c/Users/YOUR-WINDOWS-NAME/Downloads/brickstorm-123456-2400.json
+  npm run score -- "/mnt/c/Users/YOUR-WINDOWS-NAME/Downloads/brickstorm-123456-2400.json"
   ```
-  (From WSL, your Windows Downloads folder is under `/mnt/c/Users/`.)
+  (From WSL, your Windows Downloads folder is under `/mnt/c/Users/`. Keep the
+  quotes: Windows names a second download `... (1).json`, and the brackets
+  and space would confuse the terminal without them.)
 - **Device check** (on the home screen) replays 15 saved games and checks that
   this device computes exactly the same scores as the development computer.
   **Run it on your iPhone if you have one.** iPhones use a different
   JavaScript engine (Safari's), so this is the real test that scores match on
   every device. It should say PASS.
-- **Back button.** During a game, the phone's Back button pauses instead of
-  leaving the site.
+- **Back button.** During a game, the phone's Back button pauses it. Pressing
+  Back again while paused leaves the game, like closing it. On other screens,
+  Back goes back one screen.
 
 **4. Run the automated browser tests (optional).** These play a full game in
 a real browser, then check that the downloaded recording replays to exactly
@@ -201,10 +204,11 @@ Later milestones will add `apps/server` and `contracts`.
   than the paddle's speed limit, out-of-order frames, extra fields (such as a
   "score" someone added), and so on. Checks for suspicious *play* (inhuman
   reactions, near-perfect games, unusual win rates) come in Milestone 3.
-- **A recording only counts for its own match.** The checker takes the match's
-  seed and rejects a recording made on any other layout, so a great game on an
-  easy layout can't be passed off as a match result. (Milestone 3 adds match
-  IDs so the same recording can't be submitted twice.)
+- **A recording only counts for its own match.** The server's checker
+  (`verifyMatchReplay`) requires the match's seed and rejects a recording made
+  on any other layout, so a great game on an easy layout can't be passed off
+  as a match result. (Milestone 3 adds match IDs so the same recording can't be
+  submitted twice.)
 - **Rules changes can't silently change scores.** `RULES_VERSION` is stored in
   every recording. The "golden" tests replay 15 saved games and fail if their
   scores change. If you change the rules on purpose, raise `RULES_VERSION` in
@@ -232,9 +236,10 @@ paddle moves `move` pixels per frame (−8 to 8) and the launch button is held i
 - **Match length: 90 seconds** (5,400 frames), in the middle of the 60–120 range.
 - **No lives.** Losing the ball costs time and resets your multiplier, but the
   game always lasts exactly 90 seconds, so both players play the same length.
-- **Touch controls: drag to move, tap to launch.** Dragging never launches, so
-  phone players can line up a serve just like keyboard players can, which keeps
-  head-to-head matches fair across devices.
+- **Touch controls: drag to move, tap to launch.** Dragging never launches, and
+  a tap doesn't move a ball that's waiting to be served, so phone players can
+  line up a serve just like keyboard players can. That keeps head-to-head
+  matches fair across devices.
 - **Tuning is a first guess.** Weak simulated players average about 500 points
   and strong ones about 2,800, so skill clearly matters. Now that you can play
   it, tell me if it feels too slow, too fast, too easy, or too hard.

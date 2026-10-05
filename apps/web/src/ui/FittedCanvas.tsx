@@ -44,7 +44,7 @@ export function FittedCanvas({
       const roomH = box.clientHeight - 2 * FRAME_PX;
       const dpr = Math.min(3, window.devicePixelRatio || 1);
       // Work in screen pixels so the bitmap and the on-screen size match exactly.
-      const deviceW = Math.max(VIEW_W, Math.floor(Math.min(roomW, (roomH * VIEW_W) / VIEW_H) * dpr));
+      const deviceW = Math.max(1, Math.floor(Math.min(roomW, (roomH * VIEW_W) / VIEW_H) * dpr));
       const deviceH = Math.round((deviceW * VIEW_H) / VIEW_W);
       el.width = deviceW;
       el.height = deviceH;
@@ -57,8 +57,24 @@ export function FittedCanvas({
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(box);
+
+    // Moving the window to a screen with different scaling changes the pixel
+    // ratio without changing the size, so watch for that too.
+    let ratioQuery: MediaQueryList | null = null;
+    const onRatioChange = () => {
+      fit();
+      watchRatio();
+    };
+    const watchRatio = () => {
+      ratioQuery?.removeEventListener("change", onRatioChange);
+      ratioQuery = window.matchMedia?.(`(resolution: ${window.devicePixelRatio}dppx)`) ?? null;
+      ratioQuery?.addEventListener("change", onRatioChange);
+    };
+    watchRatio();
+
     return () => {
       observer.disconnect();
+      ratioQuery?.removeEventListener("change", onRatioChange);
       view.current = null;
     };
   }, [view]);

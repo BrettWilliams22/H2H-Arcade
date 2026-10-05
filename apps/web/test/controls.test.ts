@@ -174,3 +174,56 @@ describe("Controls", () => {
     expect(state.launchKey).toBe(true);
   });
 });
+
+describe("Controls: taps never move a waiting serve, and swipes never launch", () => {
+  let surface: ReturnType<typeof fakeSurface>;
+  let controls: Controls;
+
+  beforeEach(() => {
+    surface = fakeSurface();
+    controls = new Controls(surface as unknown as HTMLElement, () => field, new EventTarget());
+  });
+
+  it("does not launch on a quick swipe", () => {
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 40, t: 0 }));
+    surface.dispatchEvent(pointer("pointermove", { id: 1, x: 120, t: 50 }));
+    surface.dispatchEvent(pointer("pointerup", { id: 1, x: 200, t: 100 }));
+    expect(controls.state.launchLatch).toBe(false);
+  });
+
+  it("does not move the paddle toward a tap while the ball is waiting", () => {
+    const paddleX = 100;
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 10, t: 0 }));
+    for (let frame = 0; frame < 10; frame++) {
+      expect(moveFor(paddleX, controls.state, true)).toBe(0);
+      controls.frameTick();
+    }
+    surface.dispatchEvent(pointer("pointerup", { id: 1, x: 10, t: 160 }));
+    expect(controls.state.launchLatch).toBe(true);
+  });
+
+  it("still steers at once during a rally", () => {
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 10, t: 0 }));
+    expect(moveFor(100, controls.state, false)).toBe(-MAX_MOVE);
+  });
+
+  it("starts steering a waiting serve once the touch moves or is held", () => {
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 10, t: 0 }));
+    surface.dispatchEvent(pointer("pointermove", { id: 1, x: 30, t: 40 }));
+    expect(moveFor(100, controls.state, true)).toBe(-MAX_MOVE);
+
+    controls.reset();
+    surface.dispatchEvent(pointer("pointerdown", { id: 2, x: 10, t: 0 }));
+    for (let frame = 0; frame < 15; frame++) controls.frameTick();
+    expect(moveFor(100, controls.state, true)).toBe(-MAX_MOVE);
+  });
+
+  it("keeps a held arrow key when Ctrl or Alt is pressed and released", () => {
+    const keys = new EventTarget();
+    const c = new Controls(fakeSurface() as unknown as HTMLElement, () => field, keys);
+    keys.dispatchEvent(key("keydown", "ArrowRight"));
+    keys.dispatchEvent(key("keydown", "ControlLeft"));
+    keys.dispatchEvent(key("keyup", "ControlLeft"));
+    expect(c.state.right).toBe(true);
+  });
+});

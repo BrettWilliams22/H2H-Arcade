@@ -1,4 +1,4 @@
-import { FPS, GameSession, type Replay, type ReplayResult } from "@h2h/game";
+import { FPS, GameEventType, GameSession, type Replay, type ReplayResult } from "@h2h/game";
 import { type KeyboardEvent as ReactKeyboardEvent, type RefObject, useEffect, useRef, useState } from "react";
 import { Controls, inputFor } from "../game/controls";
 import { Effects } from "../game/effects";
@@ -20,6 +20,8 @@ interface Props {
   setup: GameSetup;
   onFinish: (replay: Replay, result: ReplayResult) => void;
   onQuit: () => void;
+  /** Called when the player resumes after a pause. */
+  onResume: () => void;
   /** Set by this screen: what the phone's Back button should do here (pause). */
   backHandler: RefObject<(() => void) | null>;
 }
@@ -40,7 +42,7 @@ function trapFocus(e: ReactKeyboardEvent<HTMLDivElement>): void {
   }
 }
 
-export function Play({ setup, onFinish, onQuit, backHandler }: Props) {
+export function Play({ setup, onFinish, onQuit, onResume, backHandler }: Props) {
   const view = useRef<CanvasView | null>(null);
   const surface = useRef<HTMLDivElement>(null);
   const pauseChip = useRef<HTMLButtonElement>(null);
@@ -48,6 +50,8 @@ export function Play({ setup, onFinish, onQuit, backHandler }: Props) {
   const [paused, setPaused] = useState(false);
   const finish = useRef(onFinish);
   finish.current = onFinish;
+  const resumed = useRef(onResume);
+  resumed.current = onResume;
 
   useEffect(() => {
     const area = surface.current;
@@ -76,17 +80,23 @@ export function Play({ setup, onFinish, onQuit, backHandler }: Props) {
     const step = (): boolean => {
       if (phase === "playing") {
         fx.beforeStep(session.state);
-        session.tick(inputFor(session.state.paddleX, controls.state));
+        session.tick(inputFor(session.state.paddleX, controls.state, session.state.ballHeld));
         controls.consumeLatch();
+        controls.frameTick();
         fx.afterStep(session.state);
         sound.play(session.state, fx.bricksBefore);
+        if (session.state.events.some((e) => e.type === GameEventType.Serve)) {
+          area.dataset.lastServe = String(session.state.frame);
+        }
         if (session.state.frame % 30 === 0 || session.over) publish();
         if (session.over) phase = "ending";
         return true;
       }
 
-      // No game frame happens during the countdown or the "TIME!" screen.
-      controls.consumeLatch();
+      // No game frame happens during the countdown or the "TIME!" screen. A
+      // launch pressed while "GO!" shows is kept for the first frame of play.
+      if (phase !== "countdown" || countdown > GO_FRAMES) controls.consumeLatch();
+      controls.frameTick();
       fx.settle(session.state);
       if (phase === "countdown") {
         const beforeGo = countdown - GO_FRAMES;
@@ -141,6 +151,7 @@ export function Play({ setup, onFinish, onQuit, backHandler }: Props) {
       }
       loop.start();
       pauseChip.current?.focus({ preventScroll: true });
+      resumed.current();
     };
     control.current = { pause, resume, redraw: () => draw(0, lastAlpha) };
     backHandler.current = pause;
@@ -149,7 +160,8 @@ export function Play({ setup, onFinish, onQuit, backHandler }: Props) {
       if (document.hidden) pause();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || (e.code !== "Escape" && e.code !== "KeyP")) return;
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return; // leave browser shortcuts like Ctrl+P alone
+      if (e.code !== "Escape" && e.code !== "KeyP") return;
       e.preventDefault();
       if (isPaused) resume();
       else pause();

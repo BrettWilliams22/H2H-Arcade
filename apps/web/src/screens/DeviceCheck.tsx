@@ -67,8 +67,8 @@ export function DeviceCheck({ onBack }: { onBack: () => void }) {
       <div className="panel prose">
         <h2>DEVICE CHECK</h2>
         <p>
-          This replays {rows?.length ?? 10} saved games on this device and checks that every score, and a fingerprint of
-          the whole game state, matches what the development computer computed, down to the last point.
+          This replays saved games on this device and checks that every score, and a fingerprint of the whole game
+          state, matches what the development computer computed, down to the last point.
         </p>
         <p className={`status ${status}`} data-testid="device-check-status" data-status={status}>
           {status === "running" && "Checking…"}

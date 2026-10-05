@@ -132,6 +132,8 @@ input {
   color: var(--text);
   font-family: var(--pixel);
   font-size: 12px;
+  /* Room between lines when a label wraps on narrow phones. */
+  line-height: 1.6;
   cursor: pointer;
   text-align: center;
   box-shadow: 0 4px 0 #070920;
@@ -196,7 +198,7 @@ input:focus-visible {
 }
 
 /* The real file input is invisible, so show its keyboard focus on the button around it. */
-.file-btn:focus-within {
+.file-btn:has(input:focus-visible) {
   outline: 3px solid var(--gold);
   outline-offset: 2px;
 }
@@ -228,9 +230,11 @@ input:focus-visible {
   border-radius: 4px;
   background: #0b0f2b;
   color: var(--text);
-  font-family: var(--pixel);
-  /* At least 16px, or iPhones zoom the whole page in when the field is tapped. */
+  /* At least 16px, or iPhones zoom the whole page in when the field is tapped.
+     A normal font, because 10 pixel-font digits don't fit on small phones. */
+  font-family: var(--body);
   font-size: 16px;
+  font-variant-numeric: tabular-nums;
 }
 
 .error {

@@ -109,7 +109,7 @@ export function ReplayViewer({ replay, title, onBack }: Props) {
   return (
     <div className="screen play-screen">
       <div className="play-bar">
-        <button type="button" className="chip" onClick={onBack}>
+        <button type="button" className="chip" onClick={onBack} aria-label="Back">
           ◀ BACK
         </button>
         <span className="play-label">{title}</span>
@@ -129,7 +129,7 @@ export function ReplayViewer({ replay, title, onBack }: Props) {
           onChange={(e) => control.current?.seek(Number(e.target.value))}
         />
         <div className="replay-buttons">
-          <button type="button" className="chip" onClick={togglePause}>
+          <button type="button" className="chip" onClick={togglePause} aria-label={paused ? "Play" : "Pause"}>
             {paused ? "▶ PLAY" : "II PAUSE"}
           </button>
           <span className="replay-time" aria-hidden="true">

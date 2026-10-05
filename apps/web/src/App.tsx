@@ -28,63 +28,96 @@ function initialScreen(): Screen {
   return window.location.hash === "#/check" ? { name: "check" } : { name: "home" };
 }
 
+/** Which of our history entries the browser is on: none (the page's own), the app, or a replay opened from Results. */
+type Entry = "app" | "replay";
+
+function entryOf(state: unknown): Entry | null {
+  const value = (state as { brickstorm?: unknown } | null)?.brickstorm;
+  return value === "app" || value === "replay" ? value : null;
+}
+
+/**
+ * Adds a history entry, but only during a tap, click or key press. Browsers
+ * skip entries a page adds at any other moment, which would make the Back
+ * button jump right out of the site.
+ */
+function pushEntry(entry: Entry): void {
+  const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
+  if (activation && !activation.isActive) return;
+  history.pushState({ brickstorm: entry }, "");
+}
+
+function clearHash(): void {
+  if (window.location.hash) history.replaceState(history.state, "", window.location.pathname + window.location.search);
+}
+
+function replayOf(game: Finished, back: Screen): Screen {
+  return { name: "replay", replay: game.replay, title: `REPLAY · ${game.result.score}`, back };
+}
+
 /**
  * Screen switching, wired to the browser's history so the phone's Back button
- * works: during a game it pauses, elsewhere it goes back a screen instead of
- * leaving the site. One extra history entry is kept while away from Home.
+ * works. Leaving Home adds one history entry, and a replay opened from Results
+ * adds another. Back during a game pauses it (pressing Back again while paused
+ * leaves, like closing the game); Back elsewhere goes back a screen.
+ *
+ * Every decision is made from which entry the browser landed on, never from
+ * flags, so fast taps and the Forward button can't confuse it.
  */
 function useScreens() {
   const [screen, setScreen] = useState<Screen>(initialScreen);
   const current = useRef(screen);
   current.current = screen;
-  const hasEntry = useRef(false);
-  const ignoreNextPop = useRef(false);
-  /** What Back does on the current screen, if it's special (the play screen pauses). */
+  /** What Back does on the play screen (pause). Set by the play screen. */
   const backHandler = useRef<(() => void) | null>(null);
 
   const go = useCallback((next: Screen) => {
-    if (window.location.hash) history.replaceState(history.state, "", window.location.pathname + window.location.search);
-    if (next.name === "home") {
-      if (hasEntry.current) {
-        hasEntry.current = false;
-        ignoreNextPop.current = true;
-        history.back();
-      }
-    } else if (!hasEntry.current) {
-      history.pushState({ brickstorm: true }, "");
-      hasEntry.current = true;
+    clearHash();
+    const entry = entryOf(history.state);
+    const now = current.current;
+    if (now.name === "results" && next.name === "replay") {
+      pushEntry("replay");
+    } else if (now.name === "replay" && entry === "replay") {
+      // Leaving a replay opened from Results: step back over its entry. The
+      // popstate that follows lands on the app's entry, which needs nothing.
+      history.back();
+    } else if (next.name !== "home" && entry === null) {
+      pushEntry("app");
     }
     setScreen(next);
   }, []);
 
+  /** After a Back press paused the game, resuming puts the app's entry back (resuming is a tap or key press). */
+  const rearm = useCallback(() => {
+    if (entryOf(history.state) === null) pushEntry("app");
+  }, []);
+
   useEffect(() => {
-    const onPop = () => {
-      if (ignoreNextPop.current) {
-        ignoreNextPop.current = false;
-        return;
-      }
-      hasEntry.current = false;
+    const onPop = (e: PopStateEvent) => {
+      const entry = entryOf(e.state);
       const now = current.current;
-      if (now.name === "home") return;
-      if (now.name === "play") {
-        // Stay in the game, paused, and keep the entry so the next Back is caught too.
-        backHandler.current?.();
-        history.pushState({ brickstorm: true }, "");
-        hasEntry.current = true;
+      if (entry === "replay") {
+        // Forward into a replay from its Results screen.
+        if (now.name === "results") setScreen(replayOf(now.game, now));
         return;
       }
-      if (now.name === "replay") go(now.back);
-      else setScreen({ name: "home" });
+      if (entry === "app") {
+        if (now.name === "replay" && now.back.name === "results") setScreen(now.back);
+        return;
+      }
+      // Back to the page's own entry.
+      if (now.name === "play") backHandler.current?.();
+      else if (now.name !== "home") setScreen({ name: "home" });
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [go]);
+  }, []);
 
-  return { screen, go, backHandler };
+  return { screen, go, backHandler, rearm };
 }
 
 export function App() {
-  const { screen, go, backHandler } = useScreens();
+  const { screen, go, backHandler, rearm } = useScreens();
   const home = () => go({ name: "home" });
 
   switch (screen.name) {
@@ -107,6 +140,7 @@ export function App() {
         <Play
           setup={setup}
           backHandler={backHandler}
+          onResume={rearm}
           onQuit={home}
           onFinish={(replay, result) => {
             // Bests are kept for practice and each daily layout. Hand-picked seeds don't count.
@@ -121,7 +155,7 @@ export function App() {
       return (
         <Results
           {...game}
-          onWatch={() => go({ name: "replay", replay: game.replay, title: `REPLAY · ${game.result.score}`, back: screen })}
+          onWatch={() => go(replayOf(game, screen))}
           onAgain={() => go({ name: "play", setup: againSetup(game.setup) })}
           onNew={() => go({ name: "play", setup: practiceSetup() })}
           onHome={home}
