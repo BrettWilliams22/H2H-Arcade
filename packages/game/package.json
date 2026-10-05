@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Deterministic game logic shared by the browser and the server.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./fixtures/golden.json": "./test/fixtures/golden.json"
   }
 }

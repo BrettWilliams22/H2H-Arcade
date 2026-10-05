@@ -3,20 +3,27 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
+    "dev": "npm run dev -w @h2h/web",
+    "build": "npm run build -w @h2h/web",
+    "preview": "npm run preview -w @h2h/web",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p packages/game",
+    "test:browser": "playwright test -c apps/web/playwright.config.ts",
+    "typecheck": "tsc --noEmit -p packages/game && tsc --noEmit -p apps/web",
     "simulate": "tsx packages/game/tools/simulate.ts",
     "verify": "tsx packages/game/tools/verify.ts",
+    "score": "tsx packages/game/tools/score.ts",
     "watch": "tsx packages/game/tools/watch.ts",
     "golden:update": "tsx packages/game/tools/make-golden.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

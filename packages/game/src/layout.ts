@@ -4,7 +4,17 @@
 // a match get the same seed, so they see the same bricks in every wave, no
 // matter how fast or slow they reach it.
 
-import { BRICK_CELLS, BRICK_COLS, BRICK_ROWS } from "./constants";
+import {
+  BRICK_CELLS,
+  BRICK_CELL_H,
+  BRICK_CELL_W,
+  BRICK_COLS,
+  BRICK_H,
+  BRICK_LEFT,
+  BRICK_ROWS,
+  BRICK_TOP,
+  BRICK_W,
+} from "./constants";
 import { Rng, deriveSeed } from "./rng";
 
 export const BrickType = {
@@ -26,6 +36,13 @@ export const BRICK_HP: readonly number[] = [0, 1, 2, 3, 1, 1];
 
 /** Points for breaking each brick type (before the multiplier), indexed by BrickType. */
 export const BRICK_POINTS: readonly number[] = [0, 10, 30, 60, 150, 20];
+
+/** Where the brick in a grid cell is drawn, in whole pixels. */
+export function brickRect(index: number): { x: number; y: number; w: number; h: number; row: number; col: number } {
+  const row = Math.floor(index / BRICK_COLS);
+  const col = index % BRICK_COLS;
+  return { x: col * BRICK_CELL_W + BRICK_LEFT, y: BRICK_TOP + row * BRICK_CELL_H, w: BRICK_W, h: BRICK_H, row, col };
+}
 
 const MIN_BRICKS = 16;
 const MAX_ATTEMPTS = 8;
