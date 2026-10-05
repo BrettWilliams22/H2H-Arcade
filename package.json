@@ -11,10 +11,12 @@
   },
   "scripts": {
     "dev": "npm run dev -w @h2h/web",
+    "dev:phone": "npm run dev -w @h2h/web -- --host",
     "build": "npm run build -w @h2h/web",
     "preview": "npm run preview -w @h2h/web",
     "test": "vitest run",
-    "test:browser": "playwright test -c apps/web/playwright.config.ts",
+    "test:browser": "playwright test -c apps/web/playwright.config.ts --project desktop --project phone",
+    "test:engines": "playwright test -c apps/web/playwright.config.ts --project iphone-webkit --project firefox",
     "typecheck": "tsc --noEmit -p packages/game && tsc --noEmit -p apps/web",
     "simulate": "tsx packages/game/tools/simulate.ts",
     "verify": "tsx packages/game/tools/verify.ts",

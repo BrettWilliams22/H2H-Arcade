@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUTO_SERVE_FRAMES,
   BALL_SIZE,
+  BALL_SPEED_MAX,
   BRICK_COLS,
   BRICK_HP,
   BRICK_POINTS,
@@ -126,6 +127,16 @@ describe("ball", () => {
     expect(edge.ballVX).toBeGreaterThan(0);
     expect(Math.abs(edge.ballVX)).toBeGreaterThan(Math.abs(center.ballVX));
     expect(Math.abs(edge.ballVX)).toBeGreaterThan(Math.abs(edge.ballVY));
+  });
+
+  it("never goes faster than the top speed, however long the rally", () => {
+    const state = freeBall(0, 250, 0, 1024);
+    state.ballX = (state.paddleX + PADDLE_W / 2 - BALL_SIZE / 2) * FP;
+    state.rallyHits = 1000;
+    stepUntil(state, (s) => s.ballVY < 0);
+    // The steepest angle is mostly vertical, so the vertical speed is close to the full speed.
+    expect(Math.abs(state.ballVY)).toBeLessThanOrEqual(BALL_SPEED_MAX);
+    expect(Math.abs(state.ballVY)).toBeGreaterThan(BALL_SPEED_MAX * 0.95);
   });
 
   it("is lost below the paddle, which resets the streak and puts the ball back on the paddle", () => {

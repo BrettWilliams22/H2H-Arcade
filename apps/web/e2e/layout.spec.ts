@@ -31,32 +31,39 @@ test("home and play screens fit the screen", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("touch launches the ball and dragging moves the paddle", async ({ page }, info) => {
+test("dragging moves the paddle without launching; a tap launches", async ({ page }, info) => {
   test.skip(info.project.name !== "phone", "touch test");
   await page.clock.install();
   await page.goto("/");
   await page.getByRole("button", { name: /PRACTICE/ }).click();
-  await page.clock.runFor(4_000);
+  await page.clock.runFor(3_600);
   const surface = page.getByTestId("play-surface");
   const box = await surface.boundingBox();
   if (!box) throw new Error("no play surface");
   const y = box.y + box.height - 20;
+  const touch = (type: string, id: number, x: number) =>
+    surface.dispatchEvent(type, { pointerId: id, pointerType: "touch", clientX: x, clientY: y, isPrimary: id === 1 });
 
-  // Touch near the left edge and hold, sliding to the right: the paddle should follow.
-  await surface.dispatchEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientX: box.x + 10, clientY: y, isPrimary: true });
-  await page.clock.runFor(1_000);
-  for (let i = 1; i <= 10; i++) {
-    await surface.dispatchEvent("pointermove", { pointerId: 1, pointerType: "touch", clientX: box.x + (box.width * i) / 10 - 5, clientY: y, isPrimary: true });
-    await page.clock.runFor(100);
+  // Play starts 3.5 s after the button. The ball serves by itself at frame 119, so all of this must happen well before.
+  const frame = async () => Number(await surface.getAttribute("data-frame"));
+
+  // Drag from the left edge to the right edge: the paddle follows, but the ball stays on it.
+  await touch("pointerdown", 1, box.x + 10);
+  for (let i = 1; i <= 5; i++) {
+    await touch("pointermove", 1, box.x + (box.width * i) / 5 - 5);
+    await page.clock.runFor(60);
   }
-  await page.clock.runFor(1_000);
-  // The finger ended at the right edge, so the paddle should be pinned right; the touch launched the ball.
-  const paddle = Number(await surface.getAttribute("data-paddle"));
-  expect(paddle).toBe(FIELD_W - PADDLE_W);
-  expect(Number(await surface.getAttribute("data-serves"))).toBeGreaterThanOrEqual(1);
+  // The page publishes its numbers every 30 frames; wait past frame 60 so the paddle has arrived.
+  await page.clock.runFor(700);
+  expect(await frame()).toBeGreaterThanOrEqual(60);
+  expect(Number(await surface.getAttribute("data-paddle"))).toBe(FIELD_W - PADDLE_W);
+  expect(Number(await surface.getAttribute("data-serves"))).toBe(0);
+  await touch("pointerup", 1, box.x + box.width - 5);
 
-  // After lifting the finger, the paddle stays put.
-  await surface.dispatchEvent("pointerup", { pointerId: 1, pointerType: "touch", clientX: box.x + box.width - 5, clientY: y, isPrimary: true });
-  await page.clock.runFor(1_000);
-  expect(Number(await surface.getAttribute("data-paddle"))).toBe(paddle);
+  // A quick tap launches.
+  await touch("pointerdown", 1, box.x + box.width - 5);
+  await touch("pointerup", 1, box.x + box.width - 5);
+  await page.clock.runFor(500);
+  expect(await frame()).toBeLessThan(119);
+  expect(Number(await surface.getAttribute("data-serves"))).toBe(1);
 });

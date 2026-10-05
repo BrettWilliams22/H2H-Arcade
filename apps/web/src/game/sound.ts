@@ -1,6 +1,8 @@
 // Simple retro sound effects, generated on the fly (no sound files, so
 // nothing to license). Browsers only allow sound after the player taps or
-// clicks something, so call unlock() from a button handler.
+// clicks something, so unlock() is called on every tap and key press
+// (see main.tsx). It also brings sound back after iOS interrupts it
+// (a phone call, Siri, locking the screen).
 
 import { BrickType, type GameState, GameEventType } from "@h2h/game";
 import { loadMuted, saveMuted } from "../storage";
@@ -21,7 +23,13 @@ class SoundEngine {
       this.master.gain.value = 0.18;
       this.master.connect(this.ctx.destination);
     }
-    if (this.ctx.state === "suspended") void this.ctx.resume();
+    // iOS can also report "interrupted", so resume from anything that isn't running.
+    if (this.ctx.state !== "running") void this.ctx.resume().catch(() => {});
+  }
+
+  /** Sound can play right now: not muted, and the browser has allowed audio. */
+  private ready(): boolean {
+    return !this.muted && this.ctx !== null && this.master !== null && this.ctx.state === "running";
   }
 
   setMuted(muted: boolean): void {
@@ -30,7 +38,7 @@ class SoundEngine {
   }
 
   private tone(freq: number, ms: number, wave: Wave = "square", endFreq = freq, volume = 1): void {
-    if (this.muted || !this.ctx || !this.master) return;
+    if (!this.ready() || !this.ctx || !this.master) return;
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -45,7 +53,7 @@ class SoundEngine {
   }
 
   private noise(ms: number, volume = 1): void {
-    if (this.muted || !this.ctx || !this.master) return;
+    if (!this.ready() || !this.ctx || !this.master) return;
     const length = Math.floor((this.ctx.sampleRate * ms) / 1000);
     const buffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);

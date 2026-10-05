@@ -31,7 +31,7 @@ export function Results({ setup, replay, result, isBest, onWatch, onAgain, onNew
       <div className="panel results">
         <p className="eyebrow">{setup.title}</p>
         <h2>FINAL SCORE</h2>
-        <p className="big-score" data-testid="final-score">
+        <p className="big-score" data-testid="final-score" data-hash={result.hash}>
           {result.score}
         </p>
         {isBest && <p className="badge">NEW BEST!</p>}

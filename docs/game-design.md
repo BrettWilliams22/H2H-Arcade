@@ -18,13 +18,23 @@ a `RULES_VERSION` bump.
 
 - The field is 240 × 320 pixels (portrait, for phones).
 - The paddle is 40 pixels wide and moves up to 8 pixels per frame.
-- The ball starts each serve sitting on the paddle. Press launch (or tap) to
-  send it. If you're moving when you launch, the ball goes off at an angle in
-  that direction; if you're still, it goes nearly straight up. If you wait 2
-  seconds, it launches by itself.
+- **Phone:** drag anywhere on or below the field; the paddle follows your
+  finger's left-right position, up to its speed limit. A quick tap launches,
+  and so does touching with a second finger while steering. Dragging never
+  launches.
+- **Keyboard:** arrows (or A/D) move at full speed; Space, Up, W or Enter
+  launches. **Mouse:** the paddle follows the mouse; a click launches.
+- The ball starts each serve sitting on the paddle. If you're moving when you
+  launch, the ball goes off at an angle in that direction; if you're still, it
+  goes nearly straight up. If you don't launch within 2 seconds, it launches
+  by itself.
 - Where the ball hits the paddle sets its new direction: the center sends it
   nearly straight up (10° from vertical), and the edges send it out at up to 60°.
   This is the main skill: aiming.
+
+All devices produce the same kind of input (a move of −8 to 8 pixels and a
+launch button per frame), so a recording can't tell, and doesn't need to tell,
+which device it came from.
 
 ## Speed
 

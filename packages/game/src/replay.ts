@@ -156,10 +156,26 @@ export function runReplay(replay: Replay): ReplayResult {
   return resultOf(player.state);
 }
 
+/** What the checker should insist on, beyond the recording being well formed. */
+export interface ReplayExpectations {
+  /**
+   * The seed of the match this recording is for. The server must always pass
+   * it: otherwise a player could submit a good recording from a different
+   * (or easier) layout.
+   */
+  seed?: number;
+}
+
 /** Validates untrusted replay data, then plays it. This is what the server will run. */
-export function verifyReplay(data: unknown): { ok: true; result: ReplayResult } | { ok: false; error: string } {
+export function verifyReplay(
+  data: unknown,
+  expected: ReplayExpectations = {},
+): { ok: true; result: ReplayResult } | { ok: false; error: string } {
   const checked = validateReplay(data);
   if (!checked.ok) return checked;
+  if (expected.seed !== undefined && checked.replay.seed !== expected.seed >>> 0) {
+    return { ok: false, error: `replay is for seed ${checked.replay.seed}, but this match uses seed ${expected.seed >>> 0}` };
+  }
   return { ok: true, result: runReplay(checked.replay) };
 }
 

@@ -1,9 +1,12 @@
-import { type Replay, validateReplay } from "@h2h/game";
-import { useState } from "react";
+import { type Replay, runReplay, validateReplay } from "@h2h/game";
+import { useEffect, useRef, useState } from "react";
 import { parseSeed, todayKey } from "../game/seeds";
 import { sound } from "../game/sound";
 import { type GameSetup, customSetup, dailySetup, practiceSetup } from "../setup";
 import { loadBests } from "../storage";
+
+/** A real recording is well under 100 KB; refuse anything much bigger before reading it. */
+const MAX_RECORDING_BYTES = 512 * 1024;
 
 interface Props {
   onPlay: (setup: GameSetup) => void;
@@ -18,10 +21,23 @@ export function Home({ onPlay, onWatch, onHelp, onCheck }: Props) {
   const [seedError, setSeedError] = useState("");
   const [fileError, setFileError] = useState("");
   const [muted, setMuted] = useState(sound.muted);
-  const today = todayKey();
+  const [today, setToday] = useState(todayKey);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    // The daily layout changes at midnight UTC; refresh the label when the player comes back to the page.
+    const refresh = () => setToday(todayKey());
+    document.addEventListener("visibilitychange", refresh);
+    const timer = setInterval(refresh, 60_000);
+    return () => {
+      mounted.current = false;
+      document.removeEventListener("visibilitychange", refresh);
+      clearInterval(timer);
+    };
+  }, []);
 
   const start = (setup: GameSetup) => {
-    sound.unlock();
     onPlay(setup);
   };
 
@@ -37,21 +53,26 @@ export function Home({ onPlay, onWatch, onHelp, onCheck }: Props) {
   const openRecording = async (file: File | undefined) => {
     if (!file) return;
     setFileError("");
+    if (file.size > MAX_RECORDING_BYTES) {
+      setFileError("That file is too big to be a Brickstorm recording.");
+      return;
+    }
     try {
-      const checked = validateReplay(JSON.parse(await file.text()));
+      const text = await file.text();
+      if (!mounted.current) return; // the player has moved on to another screen
+      const checked = validateReplay(JSON.parse(text));
       if (!checked.ok) {
         setFileError(`That recording was rejected: ${checked.error}`);
         return;
       }
-      sound.unlock();
-      onWatch(checked.replay, file.name);
+      // Title it with the score the game computes, never a number from the file name.
+      onWatch(checked.replay, `REPLAY · ${runReplay(checked.replay).score}`);
     } catch {
-      setFileError("That file isn't a Brickstorm recording.");
+      if (mounted.current) setFileError("That file isn't a Brickstorm recording.");
     }
   };
 
   const toggleSound = () => {
-    sound.unlock();
     sound.setMuted(!muted);
     setMuted(!muted);
   };
@@ -70,7 +91,7 @@ export function Home({ onPlay, onWatch, onHelp, onCheck }: Props) {
           PRACTICE
           <small>New layout · best {bests.practice}</small>
         </button>
-        <button type="button" className="btn" onClick={() => start(dailySetup(today))}>
+        <button type="button" className="btn" onClick={() => start(dailySetup())}>
           DAILY LAYOUT
           <small>
             Same for everyone today · best {bests.daily[today] ?? 0}

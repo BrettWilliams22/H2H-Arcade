@@ -8,9 +8,9 @@ test network, and worthless test tokens.
 
 | Milestone | Status |
 |---|---|
-| 1. Game logic: deterministic, recorded, replayable without a screen | **Done, ready for you to test** |
-| 2. Playable game in the browser, with practice mode | Next |
-| 3. Server: replay checks, anti-cheat, skill ratings, matchmaking, challenge links | |
+| 1. Game logic: deterministic, recorded, replayable without a screen | Done |
+| 2. Playable game in the browser, with practice mode | **Done, ready for you to test** |
+| 3. Server: replay checks, anti-cheat, skill ratings, matchmaking, challenge links | Next |
 | 4. Contract and tests on a local test chain | |
 | 5. Deploy to Polygon Amoy and connect everything | |
 | 6. Friend test | |
@@ -44,7 +44,80 @@ Milestone 4 (Foundry) work best in WSL, so it's easier to start there.
 To edit in VS Code, install its "WSL" extension, then run `code .` from the
 project folder in Ubuntu.
 
-## How to test Milestone 1
+## How to test Milestone 2 (the browser game)
+
+**1. Start the game on your computer.**
+
+```bash
+npm run dev
+```
+
+Open http://localhost:5173 in Chrome or Edge on Windows. (WSL shares
+`localhost` with Windows, so this works even though the game runs in Ubuntu.)
+Press `Ctrl+C` in the terminal to stop it.
+
+**2. Play it on your phone.** Your phone must be on the same Wi-Fi as your PC.
+Because the game runs inside WSL, Windows has to pass the phone's connection
+through to it:
+
+1. In Ubuntu, run `npm run dev:phone` instead of `npm run dev`.
+2. On Windows, open PowerShell **as Administrator** and run these. The first
+   line finds WSL's address. The `netsh` lines forward port 5173 to WSL; run
+   them again after each Windows restart, because WSL's address can change.
+   The firewall rule only needs adding once.
+   ```powershell
+   $wsl = (wsl hostname -I).Trim().Split(" ")[0]
+   netsh interface portproxy delete v4tov4 listenport=5173 listenaddress=0.0.0.0
+   netsh interface portproxy add v4tov4 listenport=5173 listenaddress=0.0.0.0 connectport=5173 connectaddress=$wsl
+   New-NetFirewallRule -DisplayName "Brickstorm dev" -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow
+   ```
+   (The `delete` line prints an error the first time, which is fine.)
+3. Run `ipconfig` in PowerShell and find the "IPv4 Address" of your Wi-Fi
+   adapter, for example `192.168.1.23`.
+4. On your phone, open `http://192.168.1.23:5173` (with your address).
+
+**3. Things to try.**
+
+- **Practice** gives a new random layout each time. **Daily layout** is the
+  same for everyone on the same day (by UTC date). **Play a seed** lets two
+  people type the same number and play the exact same layout, which is a
+  quick way to try head-to-head with a friend before the server exists.
+- **Controls.** On a phone, drag anywhere to move. The paddle follows your
+  finger, and your finger can stay below the game so it doesn't hide the ball.
+  Tap to launch, or touch with a second finger while steering. On a computer,
+  use the arrow keys and Space, or the mouse and a click. Esc or P pauses.
+- **After a game**, watch the replay (pause, 1×/2×/4× speed, and drag to jump
+  around), or press **Download recording**. Then check the anti-cheat idea
+  yourself: the computer recomputes the score from the inputs alone, and it
+  should match the score the browser showed.
+  ```bash
+  npm run score -- /mnt/c/Users/YOUR-WINDOWS-NAME/Downloads/brickstorm-123456-2400.json
+  ```
+  (From WSL, your Windows Downloads folder is under `/mnt/c/Users/`.)
+- **Device check** (on the home screen) replays 15 saved games and checks that
+  this device computes exactly the same scores as the development computer.
+  **Run it on your iPhone if you have one.** iPhones use a different
+  JavaScript engine (Safari's), so this is the real test that scores match on
+  every device. It should say PASS.
+- **Back button.** During a game, the phone's Back button pauses instead of
+  leaving the site.
+
+**4. Run the automated browser tests (optional).** These play a full game in
+a real browser, then check that the downloaded recording replays to exactly
+the score and final state the browser showed. They also test touch controls,
+pausing, the Back button, phone and desktop layouts, and the device check.
+The first time, install the test browser (it asks for your Ubuntu password,
+to install some system libraries):
+
+```bash
+npx playwright install --with-deps chromium
+npm run test:browser
+```
+
+To also run the device check in Safari's engine and Firefox:
+`npx playwright install --with-deps webkit firefox`, then `npm run test:engines`.
+
+## Milestone 1 checks (game logic, no screen)
 
 Run these from the project folder.
 
@@ -72,8 +145,7 @@ again. That game will almost always fail, either because the recording is
 rejected or because its result no longer matches. (Rarely, a change makes no
 difference, such as a move pressed while the paddle is already against the wall.)
 
-**3. Watch a game.** There is no graphics yet (that's Milestone 2), but you
-can watch a rough text version in the terminal:
+**3. Watch a game as text.** You can also watch a rough text version in the terminal:
 
 ```bash
 npm run watch                                # simulated player, new layout each time
@@ -97,12 +169,17 @@ packages/game/          The game rules. Shared by the browser and the server.
   src/rng.ts            Seeded random numbers
   src/replay.ts         Recording format, checking recordings, replaying them
   src/session.ts        A live match: plays and records together (the browser uses this)
-  test/                 Automated tests
-  tools/                Simulated player and the simulate/verify/watch commands
+  test/                 Automated tests (and the saved "golden" games)
+  tools/                Simulated player and the simulate/verify/score/watch commands
+apps/web/               The website (React + Vite)
+  src/game/             Drawing, controls, game loop, sound, effects
+  src/screens/          Home, Play, Results, Replay, How to play, Device check
+  e2e/                  Browser tests (Playwright)
+  test/                 Unit tests for the controls and seeds
 docs/game-design.md     Brickstorm rules and scoring
 ```
 
-Later milestones will add `apps/web` (the site), `apps/server`, and `contracts`.
+Later milestones will add `apps/server` and `contracts`.
 
 ## How scores are protected
 
@@ -124,8 +201,12 @@ Later milestones will add `apps/web` (the site), `apps/server`, and `contracts`.
   than the paddle's speed limit, out-of-order frames, extra fields (such as a
   "score" someone added), and so on. Checks for suspicious *play* (inhuman
   reactions, near-perfect games, unusual win rates) come in Milestone 3.
+- **A recording only counts for its own match.** The checker takes the match's
+  seed and rejects a recording made on any other layout, so a great game on an
+  easy layout can't be passed off as a match result. (Milestone 3 adds match
+  IDs so the same recording can't be submitted twice.)
 - **Rules changes can't silently change scores.** `RULES_VERSION` is stored in
-  every recording. The "golden" tests replay 10 saved games and fail if their
+  every recording. The "golden" tests replay 15 saved games and fail if their
   scores change. If you change the rules on purpose, raise `RULES_VERSION` in
   `constants.ts` and run `npm run golden:update`.
 
@@ -146,16 +227,21 @@ Each entry in `inputs` is `[frame, move, action]`: starting at that frame, the
 paddle moves `move` pixels per frame (−8 to 8) and the launch button is held if
 `action` is 1. Only changes are stored. A typical game is 4–18 KB.
 
-## Decisions made in this milestone (tell me if you want any changed)
+## Decisions made so far (tell me if you want any changed)
 
 - **Match length: 90 seconds** (5,400 frames), in the middle of the 60–120 range.
 - **No lives.** Losing the ball costs time and resets your multiplier, but the
   game always lasts exactly 90 seconds, so both players play the same length.
-- **Controls.** One input works for keyboard and touch. A key moves the paddle at
-  full speed; on a phone the paddle follows your finger up to its speed limit.
-  A button (or tap) launches the ball, which also launches by itself after 2 seconds.
+- **Touch controls: drag to move, tap to launch.** Dragging never launches, so
+  phone players can line up a serve just like keyboard players can, which keeps
+  head-to-head matches fair across devices.
 - **Tuning is a first guess.** Weak simulated players average about 500 points
-  and strong ones about 2,800, so skill clearly matters. We'll tune speed and scoring
-  once you can play it in Milestone 2.
+  and strong ones about 2,800, so skill clearly matters. Now that you can play
+  it, tell me if it feels too slow, too fast, too easy, or too hard.
+- **Practice best scores are saved on the device only.** Real records and
+  history come with the server in Milestone 3.
+- **Art and sound are made in code**, so there's nothing to license. The
+  pixel font is Press Start 2P, which is free for commercial use under the
+  SIL Open Font License.
 - The network, currency, stakes, and fee defaults in the spec don't affect
   anything yet. I'll confirm them with you before Milestone 4.

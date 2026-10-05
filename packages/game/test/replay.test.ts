@@ -104,6 +104,14 @@ describe("runReplay", () => {
     expect(runReplay(edited).hash).not.toBe(game.live.hash);
   });
 
+  it("rejects a valid recording made on a different seed than the match's", () => {
+    const game = playBotGame(77, 90);
+    expect(verifyReplay(game.replay, { seed: 77 }).ok).toBe(true);
+    const other = verifyReplay(game.replay, { seed: 78 });
+    expect(other.ok).toBe(false);
+    if (!other.ok) expect(other.error).toMatch(/seed/);
+  });
+
   it("gives a different result for a different seed with the same inputs", () => {
     const game = playBotGame(77, 90);
     expect(runReplay({ ...game.replay, seed: 78 }).hash).not.toBe(game.live.hash);

@@ -1,7 +1,10 @@
 import { BrickType } from "@h2h/game";
 
-/** Basic bricks get a color by row, so layouts read as bands. */
-const ROW_COLORS = ["#3ee0d0", "#4fb3ff", "#7a8cff", "#c792ff", "#ff7ac8", "#ff8a65", "#ffd166", "#9be564", "#3ee0d0"];
+/**
+ * Basic bricks get a color by row, so layouts read as bands. Only cool colors
+ * are used, so a basic brick is never mistaken for Gold, Tough or a Bomb.
+ */
+const ROW_COLORS = ["#3ee0d0", "#4fb3ff", "#7a8cff", "#c792ff", "#9be564", "#5ad1ff", "#a98bff", "#6ee7b7", "#3ee0d0"];
 
 export const COLORS = {
   background: "#0b0d1f",

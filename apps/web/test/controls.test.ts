@@ -1,8 +1,8 @@
 import { FIELD_W, MAX_MOVE, PADDLE_W } from "@h2h/game";
-import { describe, expect, it } from "vitest";
-import { type ControlState, inputFor, moveFor } from "../src/game/controls";
+import { beforeEach, describe, expect, it } from "vitest";
+import { type ControlState, Controls, idleControls, inputFor, moveFor } from "../src/game/controls";
 
-const idle: ControlState = { left: false, right: false, launchKey: false, pointerX: null, pointerDown: false };
+const idle = idleControls();
 
 describe("moveFor", () => {
   it("moves at full speed while an arrow key is held", () => {
@@ -34,9 +34,143 @@ describe("moveFor", () => {
 });
 
 describe("inputFor", () => {
-  it("launches with the launch key or a touch", () => {
+  it("launches with a held key, a held mouse button, or a pending tap", () => {
     expect(inputFor(100, { ...idle, launchKey: true }).action).toBe(true);
-    expect(inputFor(100, { ...idle, pointerDown: true }).action).toBe(true);
+    expect(inputFor(100, { ...idle, mouseDown: true }).action).toBe(true);
+    expect(inputFor(100, { ...idle, launchLatch: true }).action).toBe(true);
     expect(inputFor(100, idle).action).toBe(false);
+  });
+});
+
+// ---- The Controls class, driven by fake events (no browser needed) ----
+
+/** A play area 240 CSS px wide at x = 0, so CSS pixels equal field pixels. */
+const field = { getBoundingClientRect: () => ({ left: 0, width: FIELD_W }) } as unknown as Element;
+
+function fakeSurface(): EventTarget & { setPointerCapture: () => void } {
+  return Object.assign(new EventTarget(), { setPointerCapture: () => {} });
+}
+
+function pointer(type: string, props: { id: number; kind?: string; x: number; y?: number; t: number }): Event {
+  const e = new Event(type, { cancelable: true });
+  Object.defineProperties(e, {
+    pointerId: { value: props.id },
+    pointerType: { value: props.kind ?? "touch" },
+    clientX: { value: props.x },
+    clientY: { value: props.y ?? 300 },
+    timeStamp: { value: props.t },
+  });
+  return e;
+}
+
+function key(type: "keydown" | "keyup", code: string, mods: { metaKey?: boolean; repeat?: boolean } = {}): Event {
+  const e = new Event(type, { cancelable: true });
+  Object.defineProperties(e, {
+    code: { value: code },
+    metaKey: { value: mods.metaKey ?? false },
+    ctrlKey: { value: false },
+    altKey: { value: false },
+    repeat: { value: mods.repeat ?? false },
+  });
+  return e;
+}
+
+describe("Controls", () => {
+  let surface: ReturnType<typeof fakeSurface>;
+  let keys: EventTarget;
+  let controls: Controls;
+  let state: ControlState;
+
+  beforeEach(() => {
+    surface = fakeSurface();
+    keys = new EventTarget();
+    controls = new Controls(surface as unknown as HTMLElement, () => field, keys);
+    state = controls.state;
+  });
+
+  it("steers with a dragging finger without launching", () => {
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 40, t: 0 }));
+    surface.dispatchEvent(pointer("pointermove", { id: 1, x: 120, t: 100 }));
+    expect(state.pointerX).toBe(120);
+    surface.dispatchEvent(pointer("pointerup", { id: 1, x: 120, t: 600 }));
+    expect(state.launchLatch).toBe(false);
+    expect(state.pointerX).toBeNull();
+  });
+
+  it("launches on a quick tap", () => {
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 100, t: 0 }));
+    surface.dispatchEvent(pointer("pointerup", { id: 1, x: 103, t: 120 }));
+    expect(state.launchLatch).toBe(true);
+    expect(inputFor(100, state).action).toBe(true);
+    controls.consumeLatch();
+    expect(inputFor(100, state).action).toBe(false);
+  });
+
+  it("does not launch on a slow press", () => {
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 100, t: 0 }));
+    surface.dispatchEvent(pointer("pointerup", { id: 1, x: 100, t: 400 }));
+    expect(state.launchLatch).toBe(false);
+  });
+
+  it("launches with a second finger and keeps steering with the first", () => {
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 30, t: 0 }));
+    surface.dispatchEvent(pointer("pointerdown", { id: 2, x: 220, t: 500 }));
+    expect(state.launchLatch).toBe(true);
+    expect(state.pointerX).toBe(30);
+    surface.dispatchEvent(pointer("pointermove", { id: 2, x: 200, t: 520 }));
+    expect(state.pointerX).toBe(30);
+    surface.dispatchEvent(pointer("pointerup", { id: 2, x: 200, t: 700 }));
+    expect(state.pointerX).toBe(30);
+  });
+
+  it("hands steering to the remaining finger when the steering finger lifts", () => {
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 30, t: 0 }));
+    surface.dispatchEvent(pointer("pointerdown", { id: 2, x: 220, t: 100 }));
+    surface.dispatchEvent(pointer("pointerup", { id: 1, x: 30, t: 900 }));
+    expect(state.pointerX).toBe(220);
+  });
+
+  it("launches on a mouse click and steers by hovering", () => {
+    surface.dispatchEvent(pointer("pointermove", { id: 9, kind: "mouse", x: 70, t: 0 }));
+    expect(state.pointerX).toBe(70);
+    expect(inputFor(100, state).action).toBe(false);
+    surface.dispatchEvent(pointer("pointerdown", { id: 9, kind: "mouse", x: 70, t: 10 }));
+    surface.dispatchEvent(pointer("pointerup", { id: 9, kind: "mouse", x: 70, t: 20 }));
+    expect(state.launchLatch).toBe(true);
+    expect(state.mouseDown).toBe(false);
+  });
+
+  it("never misses a key press, even if it is released before the next frame", () => {
+    keys.dispatchEvent(key("keydown", "Space"));
+    keys.dispatchEvent(key("keyup", "Space"));
+    expect(inputFor(100, state).action).toBe(true);
+  });
+
+  it("ignores browser shortcuts and recovers from the Mac Cmd key", () => {
+    const shortcut = key("keydown", "KeyA", { metaKey: true });
+    keys.dispatchEvent(shortcut);
+    expect(shortcut.defaultPrevented).toBe(false);
+    expect(state.left).toBe(false);
+
+    keys.dispatchEvent(key("keydown", "KeyA"));
+    expect(state.left).toBe(true);
+    keys.dispatchEvent(key("keyup", "MetaLeft"));
+    expect(state.left).toBe(false);
+  });
+
+  it("leaves the keyboard alone while disabled, so buttons still work when paused", () => {
+    controls.setEnabled(false);
+    const enter = key("keydown", "Enter");
+    keys.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+    expect(state.launchKey).toBe(false);
+    surface.dispatchEvent(pointer("pointerdown", { id: 1, x: 30, t: 0 }));
+    expect(state.pointerX).toBeNull();
+
+    controls.setEnabled(true);
+    const space = key("keydown", "Space");
+    keys.dispatchEvent(space);
+    expect(space.defaultPrevented).toBe(true);
+    expect(state.launchKey).toBe(true);
   });
 });

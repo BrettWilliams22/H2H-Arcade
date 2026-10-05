@@ -48,15 +48,32 @@ export class Effects {
   flashColor = "#ffffff";
   /** Brick types as they were before the last game frame (for effects and sounds of broken bricks). */
   bricksBefore: number[] = [];
+  /**
+   * Paddle and ball positions before the last game frame, so drawing can move
+   * smoothly between frames on screens faster than 60 Hz. Cosmetic only.
+   */
+  prev = { paddleX: 0, ballX: 0, ballY: 0 };
+  /** True if the ball jumped (lost, or put back on the paddle) in the last frame, so it shouldn't be smoothed. */
+  ballJumped = true;
+  private wasHeld = true;
   private counter = 0;
 
   /** Call before each game frame, so broken bricks' types are still known afterwards. */
   beforeStep(state: GameState): void {
     this.bricksBefore = state.bricks.slice();
+    this.prev = { paddleX: state.paddleX, ballX: state.ballX, ballY: state.ballY };
+    this.wasHeld = state.ballHeld;
+  }
+
+  /** Call when time passes without a game frame (countdown, pause, seeking), so nothing is smoothed. */
+  settle(state: GameState): void {
+    this.prev = { paddleX: state.paddleX, ballX: state.ballX, ballY: state.ballY };
+    this.ballJumped = false;
   }
 
   /** Call after each game frame. */
   afterStep(state: GameState): void {
+    this.ballJumped = state.ballHeld && !this.wasHeld;
     for (const event of state.events) {
       switch (event.type) {
         case GameEventType.BrickBroken: {

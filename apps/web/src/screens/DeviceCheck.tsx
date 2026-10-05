@@ -3,8 +3,24 @@ import { useEffect, useState } from "react";
 
 interface Row {
   expected: number;
+  expectedHash: number;
   got: number | null;
+  gotHash: number | null;
+  /** Why the replay was rejected, if it was. */
+  error: string | null;
   ok: boolean;
+}
+
+function hex(hash: number | null): string {
+  return hash === null ? "—" : hash.toString(16).padStart(8, "0");
+}
+
+/** Explains a failure as precisely as possible. */
+function failureText(rows: Row[]): string {
+  const rejected = rows.find((r) => r.error);
+  if (rejected) return `FAIL: a saved game was rejected (${rejected.error}). The saved games may be out of date.`;
+  if (rows.some((r) => r.got !== r.expected)) return "FAIL: this device computes different scores";
+  return "FAIL: same scores, but the game state ended up different (fingerprints don't match)";
 }
 
 /**
@@ -23,18 +39,21 @@ export function DeviceCheck({ onBack }: { onBack: () => void }) {
       .then((mod) => {
         const golden = mod.default as { cases: { score: number; hash: number; replay: unknown }[] };
         const started = performance.now();
-        const results = golden.cases.map((c) => {
+        const results = golden.cases.map((c): Row => {
           const checked = verifyReplay(c.replay);
           const got = checked.ok ? checked.result.score : null;
-          const ok = checked.ok && checked.result.score === c.score && checked.result.hash === c.hash;
-          return { expected: c.score, got, ok };
+          const gotHash = checked.ok ? checked.result.hash : null;
+          const ok = checked.ok && got === c.score && gotHash === c.hash;
+          return { expected: c.score, expectedHash: c.hash, got, gotHash, error: checked.ok ? null : checked.error, ok };
         });
         if (!cancelled) {
           setMs(performance.now() - started);
           setRows(results);
         }
       })
-      .catch((e: unknown) => setError(String(e)));
+      .catch((e: unknown) => {
+        if (!cancelled) setError(String(e));
+      });
     return () => {
       cancelled = true;
     };
@@ -48,13 +67,13 @@ export function DeviceCheck({ onBack }: { onBack: () => void }) {
       <div className="panel prose">
         <h2>DEVICE CHECK</h2>
         <p>
-          This replays {rows?.length ?? 10} saved games on this device and checks that every score matches the score
-          computed on the development computer, down to the last point.
+          This replays {rows?.length ?? 10} saved games on this device and checks that every score, and a fingerprint of
+          the whole game state, matches what the development computer computed, down to the last point.
         </p>
         <p className={`status ${status}`} data-testid="device-check-status" data-status={status}>
           {status === "running" && "Checking…"}
           {status === "pass" && `PASS: all ${rows?.length} games matched (${Math.round(ms)} ms)`}
-          {status === "fail" && (error ? `Could not run: ${error}` : "FAIL: this device computes different scores")}
+          {status === "fail" && (error ? `Could not run: ${error}` : failureText(rows ?? []))}
         </p>
         {rows && (
           <table className="check-table">
@@ -63,6 +82,7 @@ export function DeviceCheck({ onBack }: { onBack: () => void }) {
                 <th>Game</th>
                 <th>Expected</th>
                 <th>This device</th>
+                <th>Fingerprint</th>
                 <th />
               </tr>
             </thead>
@@ -72,7 +92,10 @@ export function DeviceCheck({ onBack }: { onBack: () => void }) {
                   <td>{i + 1}</td>
                   <td>{r.expected}</td>
                   <td>{r.got ?? "rejected"}</td>
-                  <td>{r.ok ? "✓" : "✗"}</td>
+                  <td className="mono" title={`expected ${hex(r.expectedHash)}`}>
+                    {hex(r.gotHash)}
+                  </td>
+                  <td aria-label={r.ok ? "match" : "mismatch"}>{r.ok ? "✓" : "✗"}</td>
                 </tr>
               ))}
             </tbody>

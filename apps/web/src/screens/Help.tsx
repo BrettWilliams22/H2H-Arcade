@@ -8,18 +8,20 @@ export function Help({ onBack }: { onBack: () => void }) {
         <h3>Controls</h3>
         <ul>
           <li>
-            <b>Phone:</b> drag anywhere below or on the game to move. Touch the screen to launch the ball.
+            <b>Phone:</b> drag anywhere on or below the game to move; the paddle follows your finger. Tap to launch the
+            ball, or touch with a second finger while steering.
           </li>
           <li>
-            <b>Keyboard:</b> ← → (or A D) to move. Space or ↑ to launch. Esc or P to pause.
+            <b>Keyboard:</b> ← → (or A D) to move. Space or ↑ to launch. Esc or P to pause and resume.
           </li>
           <li>
             <b>Mouse:</b> move to steer. Click to launch.
           </li>
         </ul>
         <p>
-          Where the ball hits the paddle aims it: the middle sends it straight up, the edges send it out at an angle.
-          Move while launching to angle your serve. The ball launches by itself after 2 seconds.
+          Where the ball hits the paddle aims it: the middle sends it nearly straight up, the edges send it out at an
+          angle. Move while launching to angle your serve. If you don't launch, the ball goes by itself after 2
+          seconds.
         </p>
 
         <h3>Bricks</h3>
