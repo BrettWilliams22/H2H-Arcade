@@ -1,0 +1,25 @@
+{
+  "name": "h2h-arcade",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p packages/game",
+    "simulate": "tsx packages/game/tools/simulate.ts",
+    "verify": "tsx packages/game/tools/verify.ts",
+    "watch": "tsx packages/game/tools/watch.ts",
+    "golden:update": "tsx packages/game/tools/make-golden.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

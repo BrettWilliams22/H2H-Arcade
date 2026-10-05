@@ -1,0 +1,10 @@
+{
+  "name": "@h2h/game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic game logic shared by the browser and the server.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
